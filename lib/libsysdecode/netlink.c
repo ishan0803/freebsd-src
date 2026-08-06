@@ -298,6 +298,18 @@ static const struct nlattr_decoder nla_d_clear_states[] = {
 };
 NL_DECLARE_ATTR_DECODER(killclear_states_decoder, nla_d_clear_states);
 
+static const struct nlattr_decoder nla_d_state[] = {
+	{ .type = PF_ST_ID, .attr_name = "id", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_CREATORID, .attr_name = "creatorid", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_IFNAME, .attr_name = "ifname", .cb = nlattr_decode_string },
+	{ .type = PF_ST_AF, .attr_name = "af", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_PROTO, .attr_name = "proto", .cb = nlattr_decode_uint16 },
+	{ .type = PF_ST_FILTER_ADDR, .attr_name = "filter_addr", .cb = nlattr_decode_in6_addr },
+	{ .type = PF_ST_FILTER_MASK, .attr_name = "filter_mask", .cb = nlattr_decode_in6_addr },
+	{ .type = PF_ST_INCLUDE_RULE, .attr_name = "include_rule", .cb = nlattr_decode_bool },
+};
+NL_DECLARE_ATTR_DECODER(state_decoder, nla_d_state);
+
 static void
 sysdecode_netlink_pf(FILE *fp, const struct genlmsghdr *genl, size_t nlm_len)
 {
@@ -313,6 +325,10 @@ sysdecode_netlink_pf(FILE *fp, const struct genlmsghdr *genl, size_t nlm_len)
 	    ((const char *)genl + sizeof(struct genlmsghdr));
 
 	switch (cmd) {
+	case PFNL_CMD_GETSTATES:
+			nl_decode_attrs_raw(fp, nla, nlm_len,
+			    state_decoder.decoders, state_decoder.count);
+		break;
 	case PFNL_CMD_GET_ADDR:
 			nl_decode_attrs_raw(fp, nla, nlm_len,
 			    addr_decoder.decoders, addr_decoder.count);
