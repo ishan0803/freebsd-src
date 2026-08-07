@@ -65,12 +65,11 @@ nlattr_decode_in6_addr(FILE *fp, const struct nlattr *attr,
 
 	struct in6_addr target;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
 		return;
 
 	memcpy(&target, NLA_DATA_CONST(attr), sizeof(struct in6_addr));
-
-	fprintf(fp, "%s=", attr_name);
 
 	char buf[INET6_ADDRSTRLEN];
 
@@ -86,12 +85,13 @@ nlattr_decode_uint64(FILE *fp, const struct nlattr *attr, const char *attr_name,
 
 	uint64_t target;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
 		return;
 
 	memcpy(&target, NLA_DATA_CONST(attr), sizeof(uint64_t));
 
-	fprintf(fp, "%s=%lu", attr_name, target);
+	fprintf(fp, "%lu", target);
 }
 
 static void
@@ -102,12 +102,13 @@ nlattr_decode_uint32(FILE *fp, const struct nlattr *attr, const char *attr_name,
 
 	uint32_t target;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
 		return;
 
 	memcpy(&target, NLA_DATA_CONST(attr), sizeof(uint32_t));
 
-	fprintf(fp, "%s=%u", attr_name, target);
+	fprintf(fp, "%u", target);
 }
 
 static void
@@ -118,12 +119,13 @@ nlattr_decode_uint16(FILE *fp, const struct nlattr *attr, const char *attr_name,
 
 	uint16_t target;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
 		return;
 
 	memcpy(&target, NLA_DATA_CONST(attr), sizeof(uint16_t));
 
-	fprintf(fp, "%s=%u", attr_name, target);
+	fprintf(fp, "%u", target);
 }
 
 static void
@@ -134,12 +136,13 @@ nlattr_decode_uint8(FILE *fp, const struct nlattr *attr, const char *attr_name,
 
 	uint8_t target;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
 		return;
 
 	memcpy(&target, NLA_DATA_CONST(attr), sizeof(uint8_t));
 
-	fprintf(fp, "%s=%u", attr_name, target);
+	fprintf(fp, "%u", target);
 }
 
 static void
@@ -150,12 +153,11 @@ nlattr_decode_bool(FILE *fp, const struct nlattr *attr, const char *attr_name,
 
 	bool target;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
 		return;
 
 	memcpy(&target, NLA_DATA_CONST(attr), sizeof(bool));
-
-	fprintf(fp, "%s=", attr_name);
 
 	if (target)
 		fprintf(fp, "TRUE");
@@ -169,12 +171,13 @@ nlattr_decode_string(FILE *fp, const struct nlattr *attr, const char *attr_name,
 {
 	(void)args;
 
+	fprintf(fp, "%s=", attr_name);
 	if (NLA_DATA_LEN(attr) == 0)
 		return;
 
 	const char *target = (const char *)NLA_DATA_CONST(attr);
 
-	fprintf(fp, "%s=%s", attr_name, target);
+	fprintf(fp, "%s", target);
 }
 
 static void
@@ -183,10 +186,9 @@ nlattr_decode_nested(FILE *fp, const struct nlattr *attr, const char *attr_name,
 {
 	const struct nlattr_decoder_set *set = args;
 
+	fprintf(fp, "%s=", attr_name);
 	if (set == NULL)
 		return;
-
-	fprintf(fp, "%s=", attr_name);
 
 	nl_decode_attrs_raw(fp, NLA_DATA_CONST(attr), NLA_DATA_LEN(attr),
 	    set->decoders, set->count);
