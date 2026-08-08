@@ -13,6 +13,7 @@
 #include <netlink/netlink_generic.h>
 #include <netlink/netlink_snl.h>
 #include <netpfil/pf/pf_nl.h>
+#include <netphil/pf/pf.h>
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -58,6 +59,24 @@ static void nl_decode_attrs_raw(FILE *fp, const struct nlattr *nla_head,
     size_t len, const struct nlattr_decoder *ps, size_t pslen);
 
 static void
+nlattr_decode_pfaddr(FILE *fp, const struct nlattr *attr,
+    const char *attr_name, const void *args __unused)
+{
+	struct pf_addr target;
+
+	fprintf(fp, "%s=", attr_name);
+	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
+		return;
+
+	memcpy(&target, NLA_DATA_CONST(attr), sizeof(struct pf_addr));
+
+	char buf[INET_ADDRSTRLEN];
+
+	if (inet_ntop(AF_INET, &target.v4, buf, sizeof(buf)) != NULL)
+		fprintf(fp, "%s", buf);
+}
+
+static void
 nlattr_decode_in6_addr(FILE *fp, const struct nlattr *attr,
     const char *attr_name, const void *args)
 {
@@ -75,6 +94,21 @@ nlattr_decode_in6_addr(FILE *fp, const struct nlattr *attr,
 
 	if (inet_ntop(AF_INET6, &target, buf, sizeof(buf)) != NULL)
 		fprintf(fp, "%s", buf);
+}
+
+static void
+nlattr_decode_int32(FILE *fp, const struct nlattr *attr, const char *attr_name,
+    const void *args __unused)
+{
+	int32_t target;
+
+	fprintf(fp, "%s=", attr_name);
+	if (NLA_DATA_LEN(attr) < (int)sizeof(target))
+		return;
+
+	memcpy(&target, NLA_DATA_CONST(attr), sizeof(int32_t));
+
+	fprintf(fp, "%u", target);
 }
 
 static void
@@ -300,15 +334,72 @@ static const struct nlattr_decoder nla_d_clear_states[] = {
 };
 NL_DECLARE_ATTR_DECODER(killclear_states_decoder, nla_d_clear_states);
 
+static const struct nlattr_decoder nla_d_skey[] = {
+	{ .type = PF_STK_ADDR0, .attr_name = "addr0", .cb = nlattr_decode_pfaddr },
+	{ .type = PF_STK_ADDR1, .attr_name = "addr1", .cb = nlattr_decode_pfaddr },
+	{ .type = PF_STK_PORT0, .attr_name = "port0", .cb = nlattr_decode_uint16 },
+	{ .type = PF_STK_PORT1, .attr_name = "port1", .cb = nlattr_decode_uint16 },
+	{ .type = PF_STK_AF, .attr_name = "af", .cb = nlattr_decode_uint8 },
+	{ .type = PF_STK_PROTO, .attr_name = "proto", .cb = nlattr_decode_uint16 },
+};
+NL_DECLARE_ATTR_DECODER(pfstate_key_decoder, nla_d_skey);
+
+static const struct nlattr_decoder nla_d_speer[] = {
+	{ .type = PF_STP_PFSS_FLAGS, .attr_name = "pfss_flags", .cb = nlattr_decode_uint16 },
+	{ .type = PF_STP_PFSS_TTL, .attr_name = "pfss_ttl", .cb = nlattr_decode_uint8 },
+	{ .type = PF_STP_SCRUB_FLAG, .attr_name = "scrub_flag", .cb = nlattr_decode_uint8 },
+	{ .type = PF_STP_PFSS_TS_MOD, .attr_name = "pfss_ts_mod", .cb = nlattr_decode_uint32 },
+	{ .type = PF_STP_SEQLO, .attr_name = "seqlo", .cb = nlattr_decode_uint32 },
+	{ .type = PF_STP_SEQHI, .attr_name = "seqhi", .cb = nlattr_decode_uint32 },
+	{ .type = PF_STP_SEQDIFF, .attr_name = "seqdiff", .cb = nlattr_decode_uint32 },
+	{ .type = PF_STP_MAX_WIN, .attr_name = "max_win", .cb = nlattr_decode_uint16 },
+	{ .type = PF_STP_MSS, .attr_name = "mss", .cb = nlattr_decode_uint16 },
+	{ .type = PF_STP_STATE, .attr_name = "state", .cb = nlattr_decode_uint8 },
+	{ .type = PF_STP_WSCALE, .attr_name = "wscale", .cb = nlattr_decode_uint8 },
+};
+NL_DECLARE_ATTR_DECODER(pfstate_peer_decoder, nla_d_speer);
+
 static const struct nlattr_decoder nla_d_state[] = {
 	{ .type = PF_ST_ID, .attr_name = "id", .cb = nlattr_decode_uint32 },
 	{ .type = PF_ST_CREATORID, .attr_name = "creatorid", .cb = nlattr_decode_uint32 },
 	{ .type = PF_ST_IFNAME, .attr_name = "ifname", .cb = nlattr_decode_string },
+	{ .type = PF_ST_ORIG_IFNAME, .attr_name = "orig_ifname", .cb = nlattr_decode_string },
+	{ .type = PF_ST_KEY_WIRE, .attr_name = "key_wire", .cb = nlattr_decode_nested, .args = &pfstate_key_decoder },
+	{ .type = PF_ST_KEY_STACK, .attr_name = "key_stack", .cb = nlattr_decode_nested, .args = &pfstate_key_decoder },
+	{ .type = PF_ST_PEER_SRC, .attr_name = "peer_src", .cb = nlattr_decode_nested, .args = &pfstate_peer_decoder },
+	{ .type = PF_ST_PEER_DST, .attr_name = "peer_dst", .cb = nlattr_decode_nested, .args = &pfstate_peer_decoder },
+	{ .type = PF_ST_RT_ADDR, .attr_name = "rt_addr", .cb = nlattr_decode_pfaddr },
+	{ .type = PF_ST_RULE, .attr_name = "rule", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_ANCHOR, .attr_name = "anchor", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_NAT_RULE, .attr_name = "nat_rule", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_CREATION, .attr_name = "creation", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_EXPIRE, .attr_name = "expire", .cb = nlattr_decode_uint32 },
+	{ .type = PF_ST_PACKETS0, .attr_name = "packets0", .cb = nlattr_decode_uint64 },
+	{ .type = PF_ST_PACKETS1, .attr_name = "packets1", .cb = nlattr_decode_uint64 },
+	{ .type = PF_ST_BYTES0, .attr_name = "bytes0", .cb = nlattr_decode_uint64 },
+	{ .type = PF_ST_BYTES1, .attr_name = "bytes1", .cb = nlattr_decode_uint64 },
 	{ .type = PF_ST_AF, .attr_name = "af", .cb = nlattr_decode_uint8 },
-	{ .type = PF_ST_PROTO, .attr_name = "proto", .cb = nlattr_decode_uint16 },
-	{ .type = PF_ST_FILTER_ADDR, .attr_name = "filter_addr", .cb = nlattr_decode_in6_addr },
-	{ .type = PF_ST_FILTER_MASK, .attr_name = "filter_mask", .cb = nlattr_decode_in6_addr },
+	{ .type = PF_ST_PROTO, .attr_name = "proto", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_DIRECTION, .attr_name = "direction", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_LOG, .attr_name = "log", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_TIMEOUT, .attr_name = "timeout", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_STATE_FLAGS, .attr_name = "state_flags", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_SYNC_FLAGS, .attr_name = "sync_flags", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_UPDATES, .attr_name = "updates", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_VERSION, .attr_name = "version", .cb = nlattr_decode_uint64 },
+	{ .type = PF_ST_FILTER_ADDR, .attr_name = "filter_addr", .cb = nlattr_decode_pfaddr },
+	{ .type = PF_ST_FILTER_MASK, .attr_name = "filter_mask", .cb = nlattr_decode_pfaddr },
+	{ .type = PF_ST_RTABLEID, .attr_name = "rtableid", .cb = nlattr_decode_int32 },
+	{ .type = PF_ST_MIN_TTL, .attr_name = "min_ttl", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_MAX_MSS, .attr_name = "max_mss", .cb = nlattr_decode_uint16 },
+	{ .type = PF_ST_DNPIPE, .attr_name = "dnpipe", .cb = nlattr_decode_uint16 },
+	{ .type = PF_ST_DNRPIPE, .attr_name = "dnrpipe", .cb = nlattr_decode_uint16 },
+	{ .type = PF_ST_RT, .attr_name = "rt", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_RT_IFNAME, .attr_name = "rt_ifname", .cb = nlattr_decode_string },
+	{ .type = PF_ST_SRC_NODE_FLAGS, .attr_name = "src_node_flags", .cb = nlattr_decode_uint8 },
+	{ .type = PF_ST_RT_AF, .attr_name = "rt_af", .cb = nlattr_decode_uint8 },
 	{ .type = PF_ST_INCLUDE_RULE, .attr_name = "include_rule", .cb = nlattr_decode_bool },
+	{ .type = PF_ST_CREATED_BY_RULE, .attr_name = "created_by_rule", .cb = nlattr_decode_nested, .args = &pf_rule_decoder },
 };
 NL_DECLARE_ATTR_DECODER(state_decoder, nla_d_state);
 
